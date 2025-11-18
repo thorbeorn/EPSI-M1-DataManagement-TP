@@ -17,8 +17,8 @@ end_t -> BIGINT to timestamp, valeur pas au format date, valeur null
 user_accounts
 Métadonnée sont les meme que dans la partie 1
 last_name -> valeur null
-birthdate -> VARCHAR(50) to timestamp
-registration_date -> text to timestamp, pas toute les date son au bon format
+birthdate -> VARCHAR(50) to date
+registration_date -> text to date, pas toute les date son au bon format
 subscription_id -> VARCHAR(50) to VARCHAR(20), valeur null
 
 subscriptions
@@ -34,13 +34,10 @@ bike_type -> valeur null
 bike_stations
 Métadonnée sont les meme que dans la partie 1
 station_name -> valeur null
-latitude -> text to numeric, valeur non comforme
-longitude -> text to numeric, valeur non comforme
+latitude -> text to numeric(9,6), valeur non comforme
+longitude -> text to numeric(9,6), valeur non comforme
 city_id -> BIGINT to SERIAL (1 to 2,147,483,647)
 
 cities
 Métadonnée sont les meme que dans la partie 1
 city_id -> BIGINT to SERIAL (1 to 2,147,483,647)
-
-weather_forecast_hourly
-Métadonnée sont les meme que dans la partie 1

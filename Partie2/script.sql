@@ -7,7 +7,6 @@ SELECT * FROM raw.subscriptions;
 SELECT * FROM raw.bikes;
 SELECT * FROM raw.bike_stations;
 SELECT * FROM raw.cities;
-SELECT * FROM raw.weather_forecast_hourly;
 
 --------- silver
 CREATE SCHEMA analytics_LLODRA_BRAURE
@@ -91,20 +90,6 @@ TABLESPACE pg_default;
 ALTER TABLE IF EXISTS analytics_LLODRA_BRAURE.cities
     OWNER to postgres;
 
---
-CREATE TABLE IF NOT EXISTS analytics_LLODRA_BRAURE.weather_forecast_hourly
-(
-    forecast_id serial NOT NULL,
-    city_id serial,
-    forecast_time timestamp with time zone,
-    temperature_celsius numeric(4,1),
-    precipitation_mm numeric(4,1),
-    CONSTRAINT weather_forecast_hourly_pkey PRIMARY KEY (forecast_id)
-)
-TABLESPACE pg_default;
-ALTER TABLE IF EXISTS analytics_LLODRA_BRAURE.weather_forecast_hourly
-    OWNER to postgres;
-
 INSERT INTO analytics_LLODRA_BRAURE.cities
 SELECT DISTINCT * 
 FROM raw.cities
@@ -158,25 +143,6 @@ WHERE
 	AND status IS NOT NULL
 	AND status NOT LIKE '%in_maintenance%'
 	AND status NOT LIKE '%retired%';
-
-INSERT INTO analytics_LLODRA_BRAURE.weather_forecast_hourly
-SELECT DISTINCT *
-FROM raw.weather_forecast_hourly wf
-WHERE 
-    wf.forecast_id IS NOT NULL
-    AND wf.city_id IS NOT NULL
-    AND wf.forecast_time IS NOT NULL
-    --
-    AND wf.temperature_celsius IS NOT NULL
-    AND wf.temperature_celsius BETWEEN -50 AND 60
-    --
-    AND wf.precipitation_mm IS NOT NULL
-    AND wf.precipitation_mm BETWEEN 0 AND 10000
-    AND EXISTS (
-        SELECT 1
-        FROM analytics_LLODRA_BRAURE.cities c
-        WHERE c.city_id = wf.city_id
-    );
 
 INSERT INTO analytics_LLODRA_BRAURE.user_accounts
 SELECT DISTINCT 
@@ -298,3 +264,43 @@ WHERE
     ) < INTERVAL '10 years';
 
 --------- gold
+CREATE SCHEMA analytics_LLODRA_BRAURE_gold_daily_activity
+CREATE TABLE analytics_LLODRA_BRAURE_gold_daily_activity.rental_summary AS
+SELECT 
+    CONCAT(
+        LOWER(LEFT(abuac.first_name, 1)), 
+        REPEAT('x', LENGTH(abuac.first_name) - 1),
+        ' ',
+        LOWER(LEFT(abuac.last_name, 1)), 
+        REPEAT('x', LENGTH(abuac.last_name) - 1)
+    ) AS full_name,
+    EXTRACT(YEAR FROM AGE(abuac.birthdate)) AS age,
+    EXTRACT(YEAR FROM AGE(CURRENT_DATE, abuac.registration_date)) AS inscription_years,
+    absub.subscription_type, 
+    absub.price_eur,
+    abikes.bike_type, 
+    abikes.model_name, 
+    abikes.commissioning_date,
+    abstat_start.station_name AS start_station_name, 
+    abcitie_start.city_name AS start_city, 
+    abcitie_start.region AS start_region,
+    EXTRACT(EPOCH FROM (abrent.end_t - abrent.start_t)) / 60 AS ride_minutes,
+    abstat_end.station_name AS end_station_name, 
+    abcitie_end.city_name AS end_city, 
+    abcitie_end.region AS end_region
+
+FROM analytics_LLODRA_BRAURE.bike_rentals abrent
+INNER JOIN analytics_LLODRA_BRAURE.user_accounts abuac
+    ON abrent.user_id = abuac.user_id
+INNER JOIN analytics_LLODRA_BRAURE.subscriptions absub
+    ON abuac.subscription_id = absub.subscription_id
+INNER JOIN analytics_LLODRA_BRAURE.bikes abikes
+    ON abrent.bike_id = abikes.bike_id
+INNER JOIN analytics_LLODRA_BRAURE.bike_stations abstat_start
+    ON abrent.start_station_id = abstat_start.station_id
+INNER JOIN analytics_LLODRA_BRAURE.cities abcitie_start
+    ON abstat_start.city_id = abcitie_start.city_id
+INNER JOIN analytics_LLODRA_BRAURE.bike_stations abstat_end
+    ON abrent.end_station_id = abstat_end.station_id
+INNER JOIN analytics_LLODRA_BRAURE.cities abcitie_end
+    ON abstat_end.city_id = abcitie_end.city_id;

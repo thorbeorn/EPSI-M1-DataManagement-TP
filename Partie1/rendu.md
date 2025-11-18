@@ -173,29 +173,6 @@ Service Marketing
 
 ---
 
-## **7. weather_forecast_hourly** — *(Optionnelle)*
-
-### **Schéma**
-| Colonne             | Type            | Clé / Référence     |
-| ------------------- | --------------- | ------------------- |
-| forecast_id         | INTEGER (int32) | PK                  |
-| city_id             | INTEGER (int32) | FK → cities.city_id |
-| forecast_time       | Timestamp       | —                   |
-| temperature_celsius | NUMERIC (float) | —                   |
-| precipitation_mm    | NUMERIC (float) | —                   |
-
-### **Documentation**
-Données météo horaires provenant d’une API externe.
-Non demandée explicitement pour le Dashboard, mais peut enrichir les analyses.
-
-### **Type**
-Donnée externe, Table de Dimension
-
-### **Owner**
-Third Party
-
----
-
 # 📌 Conclusion
 
 Ces 7 tables couvrent entièrement les besoins du Dashboard Marketing demandé par la direction :
@@ -208,4 +185,3 @@ Ces 7 tables couvrent entièrement les besoins du Dashboard Marketing demandé p
 | Analyse par ville       | bike_rentals + stations + cities |
 | Type d’abonnement       | user_accounts + subscriptions    |
 | Âge des utilisateurs    | user_accounts                    |
-| Météo (optionnel)       | weather_forecast_hourly          |
