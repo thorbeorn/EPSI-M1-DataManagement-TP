@@ -497,3 +497,115 @@ GROUP BY
     mb.model_name, mb.nb_usages
 
 ORDER BY abcitie_start.city_name;
+
+CREATE TABLE analytics_LLODRA_BRAURE_gold_daily_activity.station_summary AS
+SELECT 
+    s.station_name,
+	s.latitude,
+	s.longitude,
+    c.city_name,
+    s.capacity AS capacite_station,
+    COALESCE(departs.nb_departs, 0) AS nombre_departs,
+    COALESCE(arrivees.nb_arrivees, 0) AS nombre_arrivees,
+    COALESCE(departs.nb_departs, 0) + COALESCE(arrivees.nb_arrivees, 0) AS total_mouvements,
+    COALESCE(departs.nb_departs, 0) - COALESCE(arrivees.nb_arrivees, 0) AS solde_velos,
+    CASE 
+        WHEN s.capacity > 0 THEN 
+            ROUND((COALESCE(departs.nb_departs, 0) - COALESCE(arrivees.nb_arrivees, 0))::numeric / s.capacity * 100, 2)
+        ELSE NULL 
+    END AS taux_desequilibre_pct,
+    CASE 
+        WHEN COALESCE(departs.nb_departs, 0) - COALESCE(arrivees.nb_arrivees, 0) > s.capacity * 0.5 THEN 'DEFICIT CRITIQUE'
+        WHEN COALESCE(departs.nb_departs, 0) - COALESCE(arrivees.nb_arrivees, 0) > s.capacity * 0.2 THEN 'DEFICIT MODERE'
+        WHEN COALESCE(departs.nb_departs, 0) - COALESCE(arrivees.nb_arrivees, 0) < -s.capacity * 0.5 THEN 'SURPLUS CRITIQUE'
+        WHEN COALESCE(departs.nb_departs, 0) - COALESCE(arrivees.nb_arrivees, 0) < -s.capacity * 0.2 THEN 'SURPLUS MODERE'
+        ELSE 'EQUILIBRE'
+    END AS statut_station,
+    ROUND(COALESCE(stats_temps.temps_moyen_minutes, 0), 2) AS temps_moyen_location_min,
+    COALESCE(stats_users.nb_utilisateurs_uniques, 0) AS nb_utilisateurs_uniques,
+    type_plus.bike_type AS type_velo_plus_utilise,
+    type_plus.nb_locations AS nb_locations_type_plus,
+    model_plus.model_name AS modele_plus_utilise,
+    model_plus.nb_locations AS nb_locations_modele_plus,
+    type_moins.bike_type AS type_velo_moins_utilise,
+    type_moins.nb_locations AS nb_locations_type_moins,
+    model_moins.model_name AS modele_moins_utilise,
+    model_moins.nb_locations AS nb_locations_modele_moins
+FROM analytics_LLODRA_BRAURE.bike_stations s
+JOIN analytics_LLODRA_BRAURE.cities c
+    ON s.city_id = c.city_id
+LEFT JOIN (
+    SELECT 
+        start_station_id,
+        COUNT(rental_id) AS nb_departs
+    FROM analytics_LLODRA_BRAURE.bike_rentals
+    GROUP BY start_station_id
+) departs ON s.station_id = departs.start_station_id
+LEFT JOIN (
+    SELECT 
+        end_station_id,
+        COUNT(rental_id) AS nb_arrivees
+    FROM analytics_LLODRA_BRAURE.bike_rentals
+    GROUP BY end_station_id
+) arrivees ON s.station_id = arrivees.end_station_id
+LEFT JOIN (
+    SELECT 
+        start_station_id,
+        AVG(EXTRACT(EPOCH FROM (end_t - start_t)) / 60) AS temps_moyen_minutes,
+        COUNT(DISTINCT user_id) AS nb_utilisateurs_uniques
+    FROM analytics_LLODRA_BRAURE.bike_rentals
+    WHERE end_t IS NOT NULL AND start_t IS NOT NULL
+    GROUP BY start_station_id
+) stats_temps ON s.station_id = stats_temps.start_station_id
+LEFT JOIN (
+    SELECT 
+        start_station_id,
+        COUNT(DISTINCT user_id) AS nb_utilisateurs_uniques
+    FROM analytics_LLODRA_BRAURE.bike_rentals
+    GROUP BY start_station_id
+) stats_users ON s.station_id = stats_users.start_station_id
+LEFT JOIN LATERAL (
+    SELECT 
+        b.bike_type,
+        COUNT(r.rental_id) AS nb_locations
+    FROM analytics_LLODRA_BRAURE.bike_rentals r
+    JOIN analytics_LLODRA_BRAURE.bikes b ON r.bike_id = b.bike_id
+    WHERE r.start_station_id = s.station_id
+    GROUP BY b.bike_type
+    ORDER BY COUNT(r.rental_id) DESC
+    LIMIT 1
+) type_plus ON TRUE
+LEFT JOIN LATERAL (
+    SELECT 
+        b.model_name,
+        COUNT(r.rental_id) AS nb_locations
+    FROM analytics_LLODRA_BRAURE.bike_rentals r
+    JOIN analytics_LLODRA_BRAURE.bikes b ON r.bike_id = b.bike_id
+    WHERE r.start_station_id = s.station_id
+    GROUP BY b.model_name
+    ORDER BY COUNT(r.rental_id) DESC
+    LIMIT 1
+) model_plus ON TRUE
+LEFT JOIN LATERAL (
+    SELECT 
+        b.bike_type,
+        COUNT(r.rental_id) AS nb_locations
+    FROM analytics_LLODRA_BRAURE.bike_rentals r
+    JOIN analytics_LLODRA_BRAURE.bikes b ON r.bike_id = b.bike_id
+    WHERE r.start_station_id = s.station_id
+    GROUP BY b.bike_type
+    ORDER BY COUNT(r.rental_id) ASC
+    LIMIT 1
+) type_moins ON TRUE
+LEFT JOIN LATERAL (
+    SELECT 
+        b.model_name,
+        COUNT(r.rental_id) AS nb_locations
+    FROM analytics_LLODRA_BRAURE.bike_rentals r
+    JOIN analytics_LLODRA_BRAURE.bikes b ON r.bike_id = b.bike_id
+    WHERE r.start_station_id = s.station_id
+    GROUP BY b.model_name
+    ORDER BY COUNT(r.rental_id) ASC
+    LIMIT 1
+) model_moins ON TRUE
+ORDER BY total_mouvements DESC;
