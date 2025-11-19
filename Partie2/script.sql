@@ -609,3 +609,54 @@ LEFT JOIN LATERAL (
     LIMIT 1
 ) model_moins ON TRUE
 ORDER BY total_mouvements DESC;
+
+CREATE TABLE analytics_LLODRA_BRAURE_gold_daily_activity.bikes_summary AS
+SELECT 
+    b.bike_id,
+    b.bike_type AS type_velo,
+    b.model_name AS modele,
+    b.status AS statut,
+    b.commissioning_date AS date_mise_en_service,
+    COALESCE(stats.nb_utilisations, 0) AS nb_total_utilisations,
+    ROUND(COALESCE(stats.temps_moyen_minutes, 0), 2) AS temps_moyen_utilisation_min,
+    last_station.station_name AS station_actuelle,
+    last_city.city_name AS ville_actuelle,
+    stats.derniere_location AS date_derniere_location,
+    CASE 
+        WHEN total_locations.total > 0 THEN 
+            ROUND((COALESCE(stats.nb_utilisations, 0)::numeric / total_locations.total * 100), 2)
+        ELSE 0 
+    END AS pourcentage_utilisation,
+    ROUND(COALESCE(stats.age_moyen_utilisateurs, 0), 1) AS age_moyen_utilisateurs
+FROM analytics_LLODRA_BRAURE.bikes b
+LEFT JOIN (
+    SELECT 
+        r.bike_id,
+        COUNT(r.rental_id) AS nb_utilisations,
+        AVG(EXTRACT(EPOCH FROM (r.end_t - r.start_t)) / 60) AS temps_moyen_minutes,
+        MAX(r.end_t) AS derniere_location,
+        AVG(EXTRACT(YEAR FROM AGE(r.start_t, ua.birthdate))) AS age_moyen_utilisateurs
+    FROM analytics_LLODRA_BRAURE.bike_rentals r
+    LEFT JOIN analytics_LLODRA_BRAURE.user_accounts ua ON r.user_id = ua.user_id
+    WHERE r.end_t IS NOT NULL AND r.start_t IS NOT NULL
+    GROUP BY r.bike_id
+) stats ON b.bike_id = stats.bike_id
+LEFT JOIN LATERAL (
+    SELECT 
+        r.end_station_id,
+        r.end_t
+    FROM analytics_LLODRA_BRAURE.bike_rentals r
+    WHERE r.bike_id = b.bike_id 
+      AND r.end_t IS NOT NULL
+    ORDER BY r.end_t DESC
+    LIMIT 1
+) last_rental ON TRUE
+LEFT JOIN analytics_LLODRA_BRAURE.bike_stations last_station 
+    ON last_rental.end_station_id = last_station.station_id
+LEFT JOIN analytics_LLODRA_BRAURE.cities last_city 
+    ON last_station.city_id = last_city.city_id
+CROSS JOIN (
+    SELECT COUNT(rental_id) AS total
+    FROM analytics_LLODRA_BRAURE.bike_rentals
+) total_locations
+ORDER BY nb_total_utilisations DESC;
