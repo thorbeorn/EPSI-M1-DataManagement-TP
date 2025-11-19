@@ -825,3 +825,45 @@ LEFT JOIN LATERAL (
     LIMIT 1
 ) model_moins ON TRUE
 ORDER BY nb_total_locations DESC;
+
+CREATE TABLE analytics_LLODRA_BRAURE_gold_daily_activity.global_summary AS
+SELECT 
+    (SELECT COUNT(*) FROM analytics_LLODRA_BRAURE.user_accounts) AS nb_total_utilisateurs,
+    ROUND(COALESCE((
+        SELECT SUM(EXTRACT(EPOCH FROM (end_t - start_t)) / 60)
+        FROM analytics_LLODRA_BRAURE.bike_rentals
+        WHERE end_t IS NOT NULL AND start_t IS NOT NULL
+    ), 0), 2) AS temps_ride_total_minutes,
+    ROUND(COALESCE((
+        SELECT AVG(EXTRACT(EPOCH FROM (end_t - start_t)) / 60)
+        FROM analytics_LLODRA_BRAURE.bike_rentals
+        WHERE end_t IS NOT NULL AND start_t IS NOT NULL
+    ), 0), 2) AS temps_ride_moyen_minutes,
+    (SELECT COUNT(*) FROM analytics_LLODRA_BRAURE.bike_rentals) AS nb_total_locations,
+    (SELECT COUNT(DISTINCT bike_type) FROM analytics_LLODRA_BRAURE.bikes) AS nb_types_velo_differents,
+    (SELECT COUNT(DISTINCT model_name) FROM analytics_LLODRA_BRAURE.bikes) AS nb_modeles_differents,
+    (SELECT COUNT(*) FROM analytics_LLODRA_BRAURE.bikes) AS nb_total_velos,
+    (SELECT COUNT(*) FROM analytics_LLODRA_BRAURE.bike_stations) AS nb_total_stations,
+    (SELECT COUNT(*) FROM analytics_LLODRA_BRAURE.cities) AS nb_villes_implementation,
+    (SELECT COUNT(DISTINCT region) FROM analytics_LLODRA_BRAURE.cities) AS nb_regions,
+    ROUND(COALESCE((
+        SELECT AVG(EXTRACT(YEAR FROM AGE(CURRENT_DATE, birthdate)))
+        FROM analytics_LLODRA_BRAURE.user_accounts
+        WHERE birthdate IS NOT NULL
+    ), 0), 1) AS age_moyen_utilisateurs,
+    (SELECT sub.subscription_type
+     FROM analytics_LLODRA_BRAURE.subscriptions sub
+     JOIN analytics_LLODRA_BRAURE.user_accounts ua ON sub.subscription_id = ua.subscription_id
+     GROUP BY sub.subscription_type
+     ORDER BY COUNT(ua.user_id) DESC
+     LIMIT 1) AS abonnement_plus_vendu,
+    (SELECT COUNT(ua.user_id)
+     FROM analytics_LLODRA_BRAURE.subscriptions sub
+     JOIN analytics_LLODRA_BRAURE.user_accounts ua ON sub.subscription_id = ua.subscription_id
+     GROUP BY sub.subscription_type
+     ORDER BY COUNT(ua.user_id) DESC
+     LIMIT 1) AS nb_ventes_abonnement_plus_vendu,
+    ROUND(COALESCE((
+        SELECT AVG(price_eur)
+        FROM analytics_LLODRA_BRAURE.subscriptions
+    ), 0), 2) AS prix_moyen_abonnements;
