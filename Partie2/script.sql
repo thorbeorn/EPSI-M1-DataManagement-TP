@@ -304,3 +304,196 @@ INNER JOIN analytics_LLODRA_BRAURE.bike_stations abstat_end
     ON abrent.end_station_id = abstat_end.station_id
 INNER JOIN analytics_LLODRA_BRAURE.cities abcitie_end
     ON abstat_end.city_id = abcitie_end.city_id;
+
+CREATE TABLE analytics_LLODRA_BRAURE_gold_daily_activity.cities_summary AS
+WITH abo_top AS (
+    SELECT
+        c.city_name,
+        s.subscription_id,
+        s.subscription_type,
+        s.price_eur,
+        COUNT(*) AS nb_ventes,
+        ROW_NUMBER() OVER (
+            PARTITION BY c.city_name
+            ORDER BY COUNT(*) DESC
+        ) AS rn
+    FROM analytics_LLODRA_BRAURE.bike_rentals br
+    JOIN analytics_LLODRA_BRAURE.user_accounts ua
+        ON br.user_id = ua.user_id
+    JOIN analytics_LLODRA_BRAURE.subscriptions s
+        ON ua.subscription_id = s.subscription_id
+    JOIN analytics_LLODRA_BRAURE.bike_stations bs
+        ON br.start_station_id = bs.station_id
+    JOIN analytics_LLODRA_BRAURE.cities c
+        ON bs.city_id = c.city_id
+    GROUP BY c.city_name, s.subscription_id, s.subscription_type, s.price_eur
+),
+abo_bottom AS (
+    SELECT
+        c.city_name,
+        s.subscription_id,
+        s.subscription_type,
+        s.price_eur,
+        COUNT(*) AS nb_ventes,
+        ROW_NUMBER() OVER (
+            PARTITION BY c.city_name
+            ORDER BY COUNT(*) ASC
+        ) AS rn
+    FROM analytics_LLODRA_BRAURE.bike_rentals br
+    JOIN analytics_LLODRA_BRAURE.user_accounts ua
+        ON br.user_id = ua.user_id
+    JOIN analytics_LLODRA_BRAURE.subscriptions s
+        ON ua.subscription_id = s.subscription_id
+    JOIN analytics_LLODRA_BRAURE.bike_stations bs
+        ON br.start_station_id = bs.station_id
+    JOIN analytics_LLODRA_BRAURE.cities c
+        ON bs.city_id = c.city_id
+    GROUP BY c.city_name, s.subscription_id, s.subscription_type, s.price_eur
+),
+bike_top AS (
+    SELECT
+        c.city_name,
+        b.bike_type,
+        COUNT(*) AS nb_usages,
+        ROW_NUMBER() OVER (
+            PARTITION BY c.city_name
+            ORDER BY COUNT(*) DESC
+        ) AS rn
+    FROM analytics_LLODRA_BRAURE.bike_rentals br
+    JOIN analytics_LLODRA_BRAURE.bikes b
+        ON br.bike_id = b.bike_id
+    JOIN analytics_LLODRA_BRAURE.bike_stations bs
+        ON br.start_station_id = bs.station_id
+    JOIN analytics_LLODRA_BRAURE.cities c
+        ON bs.city_id = c.city_id
+    GROUP BY c.city_name, b.bike_type
+),
+bike_bottom AS (
+    SELECT
+        c.city_name,
+        b.bike_type,
+        COUNT(*) AS nb_usages,
+        ROW_NUMBER() OVER (
+            PARTITION BY c.city_name
+            ORDER BY COUNT(*) ASC
+        ) AS rn
+    FROM analytics_LLODRA_BRAURE.bike_rentals br
+    JOIN analytics_LLODRA_BRAURE.bikes b
+        ON br.bike_id = b.bike_id
+    JOIN analytics_LLODRA_BRAURE.bike_stations bs
+        ON br.start_station_id = bs.station_id
+    JOIN analytics_LLODRA_BRAURE.cities c
+        ON bs.city_id = c.city_id
+    GROUP BY c.city_name, b.bike_type
+),
+model_top AS (
+    SELECT
+        c.city_name,
+        b.model_name,
+        COUNT(*) AS nb_usages,
+        ROW_NUMBER() OVER (
+            PARTITION BY c.city_name
+            ORDER BY COUNT(*) DESC
+        ) AS rn
+    FROM analytics_LLODRA_BRAURE.bike_rentals br
+    JOIN analytics_LLODRA_BRAURE.bikes b
+        ON br.bike_id = b.bike_id
+    JOIN analytics_LLODRA_BRAURE.bike_stations bs
+        ON br.start_station_id = bs.station_id
+    JOIN analytics_LLODRA_BRAURE.cities c
+        ON bs.city_id = c.city_id
+    GROUP BY c.city_name, b.model_name
+),
+model_bottom AS (
+    SELECT
+        c.city_name,
+        b.model_name,
+        COUNT(*) AS nb_usages,
+        ROW_NUMBER() OVER (
+            PARTITION BY c.city_name
+            ORDER BY COUNT(*) ASC
+        ) AS rn
+    FROM analytics_LLODRA_BRAURE.bike_rentals br
+    JOIN analytics_LLODRA_BRAURE.bikes b
+        ON br.bike_id = b.bike_id
+    JOIN analytics_LLODRA_BRAURE.bike_stations bs
+        ON br.start_station_id = bs.station_id
+    JOIN analytics_LLODRA_BRAURE.cities c
+        ON bs.city_id = c.city_id
+    GROUP BY c.city_name, b.model_name
+)
+SELECT 
+    abcitie_start.city_name,
+    abcitie_start.region,
+
+    COUNT(abstat_start.station_id) AS nombre_stations,
+    STRING_AGG(abstat_start.station_name, ', ' ORDER BY abstat_start.station_name) AS liste_stations,
+
+    COUNT(abrent.rental_id) AS nombre_locations,
+    ROUND(AVG(EXTRACT(YEAR FROM AGE(CURRENT_DATE, abuac.birthdate))))::int AS age_moyen,
+	ROUND(AVG(EXTRACT(EPOCH FROM abrent.end_t - abrent.start_t) / 60)) AS duree_moyenne_minutes,
+
+	COUNT(DISTINCT CASE WHEN abstat_start.city_id = abcitie_start.city_id THEN abrent.rental_id END) AS nb_depart,
+	COUNT(DISTINCT CASE WHEN abstat_end.city_id = abcitie_end.city_id THEN abrent.rental_id END) AS nb_arrivee,
+	COUNT(DISTINCT abuac.user_id) AS nb_utilisateurs_uniques,
+
+    at.subscription_type AS type_abonnement_top,
+    at.price_eur AS prix_abonnement_top,
+    at.nb_ventes AS ventes_abonnement_top,
+
+    ab.subscription_type AS type_abonnement_moins_vendu,
+    ab.price_eur AS prix_abonnement_moins_vendu,
+    ab.nb_ventes AS ventes_abonnement_moins_vendu,
+
+    bt.bike_type AS bike_type_plus_utilise,
+    bt.nb_usages AS nb_usages_plus_utilise,
+
+    bb.bike_type AS bike_type_moins_utilise,
+    bb.nb_usages AS nb_usages_moins_utilise,
+
+    mt.model_name AS model_plus_utilise,
+    mt.nb_usages AS nb_usages_model_plus,
+
+    mb.model_name AS model_moins_utilise,
+    mb.nb_usages AS nb_usages_model_moins
+
+FROM analytics_LLODRA_BRAURE.bike_rentals abrent
+JOIN analytics_LLODRA_BRAURE.user_accounts abuac
+    ON abrent.user_id = abuac.user_id
+JOIN analytics_LLODRA_BRAURE.subscriptions absub
+    ON abuac.subscription_id = absub.subscription_id
+JOIN analytics_LLODRA_BRAURE.bikes abikes
+    ON abrent.bike_id = abikes.bike_id
+JOIN analytics_LLODRA_BRAURE.bike_stations abstat_start
+    ON abrent.start_station_id = abstat_start.station_id
+JOIN analytics_LLODRA_BRAURE.cities abcitie_start
+    ON abstat_start.city_id = abcitie_start.city_id
+JOIN analytics_LLODRA_BRAURE.bike_stations abstat_end
+    ON abrent.end_station_id = abstat_end.station_id
+JOIN analytics_LLODRA_BRAURE.cities abcitie_end
+    ON abstat_end.city_id = abcitie_end.city_id
+
+LEFT JOIN abo_top at
+    ON at.city_name = abcitie_start.city_name AND at.rn = 1
+LEFT JOIN abo_bottom ab
+    ON ab.city_name = abcitie_start.city_name AND ab.rn = 1
+LEFT JOIN bike_top bt
+    ON bt.city_name = abcitie_start.city_name AND bt.rn = 1
+LEFT JOIN bike_bottom bb
+    ON bb.city_name = abcitie_start.city_name AND bb.rn = 1
+LEFT JOIN model_top mt
+    ON mt.city_name = abcitie_start.city_name AND mt.rn = 1
+LEFT JOIN model_bottom mb
+    ON mb.city_name = abcitie_start.city_name AND mb.rn = 1
+
+GROUP BY 
+    abcitie_start.city_name,
+    abcitie_start.region,
+    at.subscription_id, at.subscription_type, at.price_eur, at.nb_ventes,
+    ab.subscription_id, ab.subscription_type, ab.price_eur, ab.nb_ventes,
+    bt.bike_type, bt.nb_usages,
+    bb.bike_type, bb.nb_usages,
+    mt.model_name, mt.nb_usages,
+    mb.model_name, mb.nb_usages
+
+ORDER BY abcitie_start.city_name;
