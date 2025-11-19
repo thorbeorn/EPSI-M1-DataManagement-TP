@@ -264,7 +264,7 @@ WHERE
     ) < INTERVAL '10 years';
 
 --------- gold
-CREATE SCHEMA analytics_LLODRA_BRAURE_gold_daily_activity
+CREATE SCHEMA analytics_LLODRA_BRAURE_gold_daily_activity;
 CREATE TABLE analytics_LLODRA_BRAURE_gold_daily_activity.rental_summary AS
 SELECT 
     CONCAT(
