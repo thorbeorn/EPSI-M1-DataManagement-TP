@@ -743,3 +743,85 @@ LEFT JOIN LATERAL (
     LIMIT 1
 ) model_moins ON TRUE
 ORDER BY nb_total_locations DESC;
+
+CREATE TABLE analytics_LLODRA_BRAURE_gold_daily_activity.user_summary AS
+SELECT 
+    CONCAT(
+        SUBSTRING(ua.first_name, 1, 1),
+        REPEAT('x', LENGTH(ua.first_name) - 1),
+        ' ',
+        SUBSTRING(ua.last_name, 1, 1),
+        REPEAT('x', LENGTH(ua.last_name) - 1)
+    ) AS nom_anonymise,
+    EXTRACT(YEAR FROM AGE(CURRENT_DATE, ua.birthdate)) AS age,
+    CONCAT(sub.subscription_type, ' (', sub.price_eur, '€)') AS abonnement_et_prix,
+    EXTRACT(DAY FROM AGE(CURRENT_DATE, ua.registration_date)) AS jours_inscription,
+    ROUND(COALESCE(stats.temps_total_ride_minutes, 0), 2) AS temps_ride_total_min,
+    ROUND(COALESCE(stats.temps_moyen_ride_minutes, 0), 2) AS temps_ride_moyen_min,
+    COALESCE(stats.nb_total_locations, 0) AS nb_total_locations,
+    type_plus.bike_type AS type_velo_plus_utilise,
+    type_plus.nb_locations AS nb_locations_type_plus,
+    type_moins.bike_type AS type_velo_moins_utilise,
+    type_moins.nb_locations AS nb_locations_type_moins,
+    model_plus.model_name AS modele_plus_utilise,
+    model_plus.nb_locations AS nb_locations_modele_plus,
+    model_moins.model_name AS modele_moins_utilise,
+    model_moins.nb_locations AS nb_locations_modele_moins
+FROM analytics_LLODRA_BRAURE.user_accounts ua
+LEFT JOIN analytics_LLODRA_BRAURE.subscriptions sub 
+    ON ua.subscription_id = sub.subscription_id
+LEFT JOIN (
+    SELECT 
+        r.user_id,
+        COUNT(r.rental_id) AS nb_total_locations,
+        SUM(EXTRACT(EPOCH FROM (r.end_t - r.start_t)) / 60) AS temps_total_ride_minutes,
+        AVG(EXTRACT(EPOCH FROM (r.end_t - r.start_t)) / 60) AS temps_moyen_ride_minutes
+    FROM analytics_LLODRA_BRAURE.bike_rentals r
+    WHERE r.end_t IS NOT NULL AND r.start_t IS NOT NULL
+    GROUP BY r.user_id
+) stats ON ua.user_id = stats.user_id
+LEFT JOIN LATERAL (
+    SELECT 
+        b.bike_type,
+        COUNT(r.rental_id) AS nb_locations
+    FROM analytics_LLODRA_BRAURE.bike_rentals r
+    JOIN analytics_LLODRA_BRAURE.bikes b ON r.bike_id = b.bike_id
+    WHERE r.user_id = ua.user_id
+    GROUP BY b.bike_type
+    ORDER BY COUNT(r.rental_id) DESC
+    LIMIT 1
+) type_plus ON TRUE
+LEFT JOIN LATERAL (
+    SELECT 
+        b.bike_type,
+        COUNT(r.rental_id) AS nb_locations
+    FROM analytics_LLODRA_BRAURE.bike_rentals r
+    JOIN analytics_LLODRA_BRAURE.bikes b ON r.bike_id = b.bike_id
+    WHERE r.user_id = ua.user_id
+    GROUP BY b.bike_type
+    ORDER BY COUNT(r.rental_id) ASC
+    LIMIT 1
+) type_moins ON TRUE
+LEFT JOIN LATERAL (
+    SELECT 
+        b.model_name,
+        COUNT(r.rental_id) AS nb_locations
+    FROM analytics_LLODRA_BRAURE.bike_rentals r
+    JOIN analytics_LLODRA_BRAURE.bikes b ON r.bike_id = b.bike_id
+    WHERE r.user_id = ua.user_id
+    GROUP BY b.model_name
+    ORDER BY COUNT(r.rental_id) DESC
+    LIMIT 1
+) model_plus ON TRUE
+LEFT JOIN LATERAL (
+    SELECT 
+        b.model_name,
+        COUNT(r.rental_id) AS nb_locations
+    FROM analytics_LLODRA_BRAURE.bike_rentals r
+    JOIN analytics_LLODRA_BRAURE.bikes b ON r.bike_id = b.bike_id
+    WHERE r.user_id = ua.user_id
+    GROUP BY b.model_name
+    ORDER BY COUNT(r.rental_id) ASC
+    LIMIT 1
+) model_moins ON TRUE
+ORDER BY nb_total_locations DESC;
