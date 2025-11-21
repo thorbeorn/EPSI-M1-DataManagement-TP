@@ -1,15 +1,3 @@
-Voici un **README complet**, clair, structuré, prêt à être déposé dans un dépôt GitHub**.
-Je l’ai rédigé de manière professionnelle, en respectant les standards habituels pour un projet Data Engineering / Data Analytics.
-Il inclut :
-✔ Explication du TP
-✔ Architecture Raw → Silver → Gold
-✔ Détails par partie (OpenMetadata, PostgreSQL, Metabase, Sécurité)
-✔ Instructions d’exécution
-✔ Livrables
-✔ Crédits
-
----
-
 # 🚲 **TP – Cycle de vie de la donnée : de la source au Dashboard**
 
 ### **Projet : VéloCity — Pipeline & Dashboard Analytics**
